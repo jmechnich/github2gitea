@@ -1,0 +1,280 @@
+#!/usr/bin/env python3
+
+import argparse
+import json
+import logging
+import os
+import re
+import requests
+import sys
+
+from github import Github, GithubException
+
+class G2GException(Exception):
+    pass
+
+class Github2Gitea(object):
+    def __init__(self):
+        self.create_logger()
+
+    def exec(self):
+        # configure program from commandline and files
+        self.parse_args()
+        self.load_config()
+        self.logger.debug(f'Configuration: {self.config}')
+
+        # initialize API sessions
+        self.gh_init()
+        self.gt_init()
+
+        # get repo list from GitHub and set up migrations
+        repolist = self.gh_get_repolist()
+        self.gt_migrate(repolist)
+
+    def create_logger(self):
+        self.logger = logging.getLogger('github2gitea')
+        self.logger.setLevel(logging.INFO)
+        ch = logging.StreamHandler()
+        formatter = logging.Formatter(
+            '%(asctime)s %(levelname)7s  %(message)s',
+            #datefmt='%Y-%m-%d %H:%M:%S'
+        )
+        ch.setFormatter(formatter)
+        self.logger.addHandler(ch)
+
+
+    def gh_init(self):
+        self.logger.debug('Entering gh_init')
+
+        if 'github_token' in self.config:
+            if 'github_user' in self.config:
+                self.logger.info('Using user/pass login for GitHub')
+                self.gh = Github(
+                    self.config['github_user'],
+                    self.config['github_token']
+                )
+            else:
+                self.logger.info('Using token login for GitHub')
+                self.gh = Github(self.config['github_token'])
+        else:
+            raise G2GException('Missing credentials for GitHub login')
+
+    def gh_get_repolist(self):
+        self.logger.debug('Entering gh_get_repolist')
+
+        ret = []
+        owner_filter = self.config.get('owner_filter', None)
+        if owner_filter:
+            self.logger.info(f'Using GitHub repo owner filter {owner_filter}')
+        skip_forks = not self.config.get('mirror_forks', False)
+        for repo in self.gh.get_user().get_repos():
+            self.logger.debug(repo.raw_data)
+            if owner_filter and not re.match(owner_filter, repo.owner.login):
+                self.logger.info(
+                    f'Skipping GitHub repo {repo.full_name} due to owner filter'
+                )
+                continue
+            if skip_forks and repo.fork:
+                self.logger.info(
+                    f'Skipping GitHub repo {repo.full_name} because it is a'
+                    ' fork'
+                )
+                continue
+            self.logger.info(f'Selecting GitHub repo {repo.full_name}')
+            ret.append(repo)
+
+        return ret
+
+    def gt_init(self):
+        self.logger.debug('Entering gt_init')
+
+        if not 'gitea_apiurl' in self.config:
+            raise G2GException('Missing url for Gitea API')
+        if not 'gitea_token' in self.config:
+            raise G2GException('Missing token for Gitea API')
+
+        apiurl = self.config['gitea_apiurl']
+        token  = self.config['gitea_token']
+        self.gt = requests.Session()
+        self.gt.headers.update({
+            'Content-type'  : 'application/json',
+            'Authorization' : f'token {token}'
+        })
+
+        r = self.gt.get(f'{apiurl}/version')
+        if r.status_code != 200:
+            raise G2GException('Cannot connect to Gitea API')
+
+    def gt_migrate(self, repolist):
+        self.logger.debug('Entering gt_migrate')
+
+        apiurl = self.config['gitea_apiurl']
+
+        r = self.gt.get(f'{apiurl}/user')
+        if r.status_code != 200:
+            raise G2GException('Cannot get user details from Gitea API')
+
+        uid = json.loads(r.text)['login']
+        owner = self.config.get('mirror_owner', uid)
+        self.logger.info(f'Using {owner} as owner of mirrored repos')
+
+        recreate = self.config.get('recreate', False)
+        if recreate:
+            self.logger.info(f'Recreating mirrored repos')
+
+        self.logger.info(f'Starting migration of {len(repolist)} repos')
+        for repo in repolist:
+            if self.config.get('use_full_name', False):
+                repo_name = '_'.join(repo.full_name.split('/'))
+            else:
+                repo_name = repo.name
+
+            if recreate:
+                # check if repo already exists
+                r = self.gt.get(f'{apiurl}/repos/{owner}/{repo_name}')
+                if r.status_code == 200:
+                    self.logger.info(f'Repo {repo_name} exists, deleting')
+                    r = self.gt.delete(f'{apiurl}/repos/{owner}/{repo_name}')
+                    if r.status_code != 204:
+                        raise G2GException(f'Error deleting {repo_name}')
+
+            m = {
+                'repo_name'   : repo_name,
+                'repo_owner'  : owner,
+                'description' : repo.description or 'empty description',
+                'clone_addr'  : repo.clone_url,
+                'mirror'      : True,
+                'private'     : repo.private,
+                'issues'      : self.config.get('mirror_issues', False),
+                'labels'      : self.config.get('mirror_labels', False),
+                'milestones'  : self.config.get('mirror_milestones', False),
+                'releases'    : self.config.get('mirror_releases', False),
+                'wiki'        : repo.has_wiki,
+            }
+
+            if repo.private:
+                m['auth_username'] = self.config['github_username']
+                m['auth_password'] = self.config['github_token']
+
+            jsonstring = json.dumps(m)
+            self.logger.debug(jsonstring)
+
+            if 'dry_run' in self.config:
+                continue
+
+            r = self.gt.post(f'{apiurl}/repos/migrate', data=jsonstring)
+            if r.status_code != 201:
+                if r.status_code == 409:
+                    self.logger.info(f'Repo {repo_name} already exists')
+                    continue
+                else:
+                    raise G2GException(r)
+            else:
+                self.logger.info(f'Creating mirror {repo_name}')
+
+    def load_config(self):
+        self.logger.debug('Entering load_config')
+
+        config_paths = [
+            os.path.join(
+                os.environ['HOME'], '.config', 'github2gitea', 'config.json'
+            ),
+            'config.json',
+        ]
+        config_arg = self.config.get('config_file', None)
+        if config_arg and not config_arg in config_paths:
+            config_paths.append(self.config['config_file'])
+
+        config = {}
+        for path in config_paths:
+            if not os.path.exists(path):
+                continue
+
+            with open(path) as f:
+                d = json.load(f)
+                if len(d) != 0:
+                    self.logger.info(f'Updating configuration using {path}')
+                    config.update(d)
+
+        config.update(self.config)
+        self.config = config
+
+    def parse_args(self):
+        self.logger.debug('Entering parse_args')
+
+        parser = argparse.ArgumentParser(
+            description='Set up Gitea mirrors of GitHub repositories.'
+        )
+        # general options
+        parser.add_argument(
+            '-c', '--config-file', help='path to config file'
+        )
+        parser.add_argument(
+            '-d', '--debug', action='store_true', help='enable debug output'
+        )
+        parser.add_argument(
+            '-n', '--dry-run', action='store_true',
+            help='execute read-only actions',
+        )
+        parser.add_argument(
+            '-q', '--quiet', action='store_true', help='enable quiet mode'
+        )
+
+        # API locations and authorization
+        parser.add_argument(
+            '--github-token', help='GitHub access token'
+        )
+        parser.add_argument(
+            '--github-user', help='GitHub user'
+        )
+        parser.add_argument(
+            '--gitea-apiurl', help='Gitea API URL'
+        )
+        parser.add_argument(
+            '--gitea-token', help='Gitea access token'
+        )
+
+        # mirror options
+        parser.add_argument(
+            '--mirror-forks', action='store_true', help='mirror forks'
+        )
+        parser.add_argument(
+            '--mirror-owner', help='Gitea user or org owning the mirror repos'
+        )
+        parser.add_argument(
+            '--owner-filter', help='GitHub repository owner filter'
+        )
+        parser.add_argument(
+            '--recreate', action='store_true',
+            help='recreate mirrored repos if they already exist'
+        )
+        parser.add_argument(
+            '--use-full-name', action='store_true',
+            help='use full repo name including owner'
+        )
+
+        args = parser.parse_args()
+
+        # set up logger
+        loglevel = logging.INFO
+        if args.debug:
+            loglevel = logging.DEBUG
+        if args.quiet:
+            loglevel = logging.ERROR
+        self.logger.setLevel(loglevel)
+
+        self.config = {
+            k: v for k,v in vars(args).items()
+            if v not in [ None, False, 'false', 'False' ]
+        }
+
+if __name__ == '__main__':
+    try:
+        g2g = Github2Gitea()
+        g2g.exec()
+    except GithubException as e:
+        g2g.logger.error(str(e))
+        sys.exit(1)
+    except G2GException as e:
+        g2g.logger.error(str(e))
+        sys.exit(1)
