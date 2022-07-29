@@ -1,4 +1,8 @@
-# github2gitea - Set up Gitea mirrors of GitHub repositories.
+# github2gitea - Set up Gitea mirrors of GitHub repositories
+
+`github2gitea` is a command-line application for setting up Gitea
+mirrors of GitHub repositories. It can be used as well for continously
+adding new mirrors in regular intervals, e.g. using cron.
 
 ## Usage
 
@@ -59,10 +63,9 @@ optional arguments:
 Alternatively, configuration parameters can be set in a json-formatted
 file.
 
-Default search paths are
-
-    * `$HOME/.config/github2gitea/config.json`
-    * `$PWD/config.json`
+Default search paths are:
+* `$HOME/.config/github2gitea/config.json`
+* `$PWD/config.json`
 
 An additional file path can be added using the `-c/--config-file`
 option.
@@ -70,7 +73,7 @@ option.
 ## Minimal settings required for running
 
 First, create a Personal Access Token on GitHub with at least scope
-'repo'. Consider setting an unlimited lifetime.
+`repo`. Consider setting an unlimited lifetime.
 
 Create a Gitea access token for your user.
 
@@ -82,6 +85,6 @@ command-line options):
   "github_user"  : "GITHUB_USERNAME",
   "github_token" : "GITHUB_PERSONAL_ACCESS_TOKEN",
   "gitea_apiurl" : "GITEA_APIURL",
-  "gitea_token"  : "GITEA_ACCESS_TOKEN
+  "gitea_token"  : "GITEA_ACCESS_TOKEN"
   }
 ```
