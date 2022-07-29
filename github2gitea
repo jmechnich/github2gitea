@@ -21,7 +21,7 @@ class Github2Gitea(object):
         # configure program from commandline and files
         self.parse_args()
         self.load_config()
-        self.logger.debug(f'Configuration: {self.config}')
+        self.print_config()
 
         # initialize API sessions
         self.gh_init()
@@ -65,7 +65,7 @@ class Github2Gitea(object):
         ret = []
         owner_filter = self.config.get('owner_filter', None)
         if owner_filter:
-            self.logger.info(f'Using GitHub repo owner filter {owner_filter}')
+            self.logger.info(f'Using GitHub repo owner filter "{owner_filter}"')
         skip_forks = not self.config.get('mirror_forks', False)
 
         if len(self.config['repos']):
@@ -79,16 +79,16 @@ class Github2Gitea(object):
             self.logger.debug(repo.raw_data)
             if owner_filter and not re.match(owner_filter, repo.owner.login):
                 self.logger.info(
-                    f'Skipping GitHub repo {repo.full_name} due to owner filter'
+                    f'Repository "{repo.full_name}" skipped due to owner filter'
                 )
                 continue
             if skip_forks and repo.fork:
                 self.logger.info(
-                    f'Skipping GitHub repo {repo.full_name} because it is a'
+                    f'Repository "{repo.full_name}" skipped because it is a'
                     ' fork'
                 )
                 continue
-            self.logger.info(f'Selecting GitHub repo {repo.full_name}')
+            self.logger.info(f'Repository "{repo.full_name}" selected')
             ret.append(repo)
 
         return ret
@@ -112,6 +112,8 @@ class Github2Gitea(object):
         r = self.gt.get(f'{apiurl}/version')
         if r.status_code != 200:
             raise G2GException('Cannot connect to Gitea API')
+        version = json.loads(r.text)['version']
+        self.logger.debug(f'Gitea version {version}')
 
     def gt_migrate(self, repolist):
         self.logger.debug('Entering gt_migrate')
@@ -124,7 +126,7 @@ class Github2Gitea(object):
 
         uid = json.loads(r.text)['login']
         owner = self.config.get('mirror_owner', uid)
-        self.logger.info(f'Using {owner} as owner of mirrored repos')
+        self.logger.info(f'Using "{owner}" as owner of mirrored repos')
 
         recreate = self.config.get('recreate', False)
         if recreate:
@@ -141,23 +143,30 @@ class Github2Gitea(object):
                 # check if repo already exists
                 r = self.gt.get(f'{apiurl}/repos/{owner}/{repo_name}')
                 if r.status_code == 200:
-                    self.logger.info(f'Repo {repo_name} exists, deleting')
+                    self.logger.info(f'Repo "{repo_name}" exists, deleting')
                     r = self.gt.delete(f'{apiurl}/repos/{owner}/{repo_name}')
                     if r.status_code != 204:
-                        raise G2GException(f'Error deleting {repo_name}')
+                        raise G2GException(f'Error deleting "{repo_name}"')
+
+            mirror_wiki = repo.has_wiki and \
+                self.config.get('mirror_wikis', False)
 
             m = {
-                'repo_name'   : repo_name,
-                'repo_owner'  : owner,
-                'description' : repo.description or 'empty description',
-                'clone_addr'  : repo.clone_url,
-                'mirror'      : True,
-                'private'     : repo.private,
-                'issues'      : self.config.get('mirror_issues', False),
-                'labels'      : self.config.get('mirror_labels', False),
-                'milestones'  : self.config.get('mirror_milestones', False),
-                'releases'    : self.config.get('mirror_releases', False),
-                'wiki'        : repo.has_wiki,
+                'clone_addr'     : repo.clone_url,
+                'description'    : repo.description or 'empty description',
+                'issues'         : self.config.get('mirror_issues', False),
+                'labels'         : self.config.get('mirror_labels', False),
+                'lfs'            : False, # ToDo
+                'lfs_endpoint'   : '',    # ToDo
+                'milestones'     : self.config.get('mirror_milestones', False),
+                'mirror'         : True,
+                'mirror_interval': self.config.get('mirror_interval', ''),
+                'private'        : repo.private,
+                'pull_requests'  : self.config.get('mirror_pull_requests', False),
+                'releases'       : self.config.get('mirror_releases', False),
+                'repo_name'      : repo_name,
+                'repo_owner'     : owner,
+                'wiki'           : mirror_wiki,
             }
 
             if repo.private:
@@ -173,12 +182,12 @@ class Github2Gitea(object):
             r = self.gt.post(f'{apiurl}/repos/migrate', data=jsonstring)
             if r.status_code != 201:
                 if r.status_code == 409:
-                    self.logger.info(f'Repo {repo_name} already exists')
+                    self.logger.info(f'Repository "{repo_name}" already exists')
                     continue
                 else:
                     raise G2GException(r)
             else:
-                self.logger.info(f'Creating mirror {repo_name}')
+                self.logger.info(f'Creating mirror "{repo_name}"')
 
     def load_config(self):
         self.logger.debug('Entering load_config')
@@ -201,11 +210,19 @@ class Github2Gitea(object):
             with open(path) as f:
                 d = json.load(f)
                 if len(d) != 0:
-                    self.logger.info(f'Updating configuration using {path}')
+                    self.logger.info(f'Updating configuration using "{path}"')
                     config.update(d)
 
         config.update(self.config)
         self.config = config
+
+    def print_config(self):
+        self.logger.debug('Entering print_config')
+
+        if "print_config" in self.config:
+            for k, v in self.config.items():
+                print(f'{k:24}: {v}')
+            sys.exit(0)
 
     def parse_args(self):
         self.logger.debug('Entering parse_args')
@@ -225,6 +242,10 @@ class Github2Gitea(object):
             help='execute read-only actions',
         )
         parser.add_argument(
+            '-p', '--print-config', action='store_true',
+            help='print configuration and exit'
+        )
+        parser.add_argument(
             '-q', '--quiet', action='store_true', help='enable quiet mode'
         )
 
@@ -235,27 +256,60 @@ class Github2Gitea(object):
 
         # API locations and authorization
         parser.add_argument(
-            '--github-token', help='GitHub access token'
+            '--github-token', help='set GitHub access token'
         )
         parser.add_argument(
-            '--github-user', help='GitHub user'
+            '--github-user', help='set GitHub user'
         )
         parser.add_argument(
-            '--gitea-apiurl', help='Gitea API URL'
+            '--gitea-apiurl', help='set Gitea API URL'
         )
         parser.add_argument(
-            '--gitea-token', help='Gitea access token'
+            '--gitea-token', help='set Gitea access token'
         )
 
-        # mirror options
+        # repo selection options
         parser.add_argument(
             '--mirror-forks', action='store_true', help='mirror forks'
         )
         parser.add_argument(
-            '--mirror-owner', help='Gitea user or org owning the mirror repos'
+            '--owner-filter', help='set GitHub repository owner filter'
+        )
+
+        # mirroring options
+        parser.add_argument(
+            '--mirror-interval',
+            help='mirror interval (default: 8 hours).'
+            ' Valid time units are "h", "m, "s". 0 to disable automatic sync.',
         )
         parser.add_argument(
-            '--owner-filter', help='GitHub repository owner filter'
+            '--mirror-issues', action='store_true',
+            help='mirror issues (not yet fully implemented in Gitea)'
+        )
+        parser.add_argument(
+            '--mirror-labels', action='store_true',
+            help='mirror labels (not yet fully implemented in Gitea)'
+        )
+        parser.add_argument(
+            '--mirror-milestones', action='store_true',
+            help='mirror milestones (not yet fully implemented in Gitea)'
+        )
+        parser.add_argument(
+            '--mirror-owner',
+            help='set Gitea user or org owning the mirror repos'
+            ' (default: owner of used access token)'
+        )
+        parser.add_argument(
+            '--mirror-pull-requests', action='store_true',
+            help='mirror pull requests (not yet fully implemented in Gitea)'
+        )
+        parser.add_argument(
+            '--mirror-releases', action='store_true',
+            help='mirror releases (not yet fully implemented in Gitea)'
+        )
+        parser.add_argument(
+            '--mirror-wikis', action='store_true',
+            help='mirror wikis'
         )
         parser.add_argument(
             '--recreate', action='store_true',
@@ -263,7 +317,8 @@ class Github2Gitea(object):
         )
         parser.add_argument(
             '--use-full-name', action='store_true',
-            help='use full repo name including owner'
+            help='use full repo name including owner for mirror'
+            ' (i.e. "owner_name")'
         )
 
         args = parser.parse_args()
