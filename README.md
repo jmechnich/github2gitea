@@ -10,8 +10,13 @@ usage: github2gitea [-h] [-c CONFIG_FILE] [-d] [-n] [-q] [--github-token GITHUB_
                     [--gitea-token GITEA_TOKEN] [--mirror-forks]
                     [--mirror-owner MIRROR_OWNER] [--owner-filter OWNER_FILTER] [--recreate]
                     [--use-full-name]
+                    [repos ...]
 
 Set up Gitea mirrors of GitHub repositories.
+
+positional arguments:
+  repos                 (optional) explicit list of GitHub repositories formatted as
+                        owner/name
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -38,6 +43,11 @@ optional arguments:
 ```
 
 Alternatively, configuration parameters can be set in a json-formatted
-file. Default search paths are
-`$HOME/.config/github2gitea/config.json` and `$PWD/config.json`. An
-additional file path can be added using the `-c/--config-file` option.
+file.
+
+Default search paths are
+    * `$HOME/.config/github2gitea/config.json`
+    * `$PWD/config.json`
+
+An additional file path can be added using the `-c/--config-file`
+option.

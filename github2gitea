@@ -230,7 +230,7 @@ class Github2Gitea(object):
 
         parser.add_argument(
             'repos', nargs="*",
-            help='list of GitHub repositories formatted as owner/name'
+            help='(optional) explicit list of GitHub repositories formatted as owner/name'
         )
 
         # API locations and authorization
