@@ -1,2 +1,7 @@
 *~
+/.eggs/
+/build/
+/dist/
+/*.egg-info/
+
 /config.json
