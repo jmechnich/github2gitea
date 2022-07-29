@@ -1,3 +1,8 @@
+[![PyPI versio](https://img.shields.io/pypi/v/github2gitea)](https://pypi.org/project/github2gitea/)
+[![PyPi format](https://img.shields.io/pypi/format/github2gitea)](https://pypi.org/project/github2gitea/)
+[![PyPI license](https://img.shields.io/pypi/l/github2gitea)](https://pypi.org/project/github2gitea/)
+[![PyPi weekly downloads](https://img.shields.io/pypi/dw/github2gitea)](https://pypi.org/project/github2gitea/)
+
 # github2gitea - Set up Gitea mirrors of GitHub repositories
 
 `github2gitea` is a command-line application for setting up Gitea
