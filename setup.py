@@ -9,6 +9,7 @@ setup(
     name='github2gitea',
     author='Joerg Mechnich',
     author_email='joerg.mechnich@gmail.com',
+    license="GNU GPLv3",
     description='Synchronize GitHub repositories to Gitea.',
     long_description=long_description,
     long_description_content_type="text/markdown",

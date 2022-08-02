@@ -91,5 +91,5 @@ command-line options):
   "github_token" : "GITHUB_PERSONAL_ACCESS_TOKEN",
   "gitea_apiurl" : "GITEA_APIURL",
   "gitea_token"  : "GITEA_ACCESS_TOKEN"
-  }
+}
 ```
