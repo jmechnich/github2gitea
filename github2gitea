@@ -3,6 +3,7 @@
 import argparse
 import json
 import logging
+import logging.handlers
 import os
 import re
 import requests
@@ -15,7 +16,8 @@ class G2GException(Exception):
 
 class Github2Gitea(object):
     def __init__(self):
-        self.create_logger()
+        self.logformat = '%(levelname)-5.5s %(message)s'
+        self.init_logger()
 
     def exec(self):
         # configure program from commandline and files
@@ -31,14 +33,31 @@ class Github2Gitea(object):
         repolist = self.gh_get_repolist()
         self.gt_migrate(repolist)
 
-    def create_logger(self):
+    def init_logger(self):
         self.logger = logging.getLogger('github2gitea')
         self.logger.setLevel(logging.INFO)
         ch = logging.StreamHandler()
-        formatter = logging.Formatter('%(levelname)7s  %(message)s')
+        formatter = logging.Formatter(self.logformat)
         ch.setFormatter(formatter)
         self.logger.addHandler(ch)
 
+    def init_syslog(self):
+        self.logger.debug('Entering init_syslog')
+
+        for address in [
+                '/dev/log',        # Linux
+                '/var/run/syslog', # macOS
+        ]:
+            if os.path.exists(address):
+                ch = logging.handlers.SysLogHandler(address='/dev/log')
+                formatter = logging.Formatter(
+                    f'%(name)s[%(process)s]: {self.logformat}'
+                )
+                ch.setFormatter(formatter)
+                self.logger.addHandler(ch)
+                break
+        else:
+            self.logger.warning('Unable to set up logging to syslog')
 
     def gh_init(self):
         self.logger.debug('Entering gh_init')
@@ -161,6 +180,7 @@ class Github2Gitea(object):
                 self.config.get('mirror_wikis', False)
 
             m = {
+                'auth_token'     : self.config.get('github_token', ''),
                 'clone_addr'     : repo.clone_url,
                 'description'    : repo.description or 'empty description',
                 'issues'         : self.config.get('mirror_issues', False),
@@ -171,7 +191,8 @@ class Github2Gitea(object):
                 'mirror'         : True,
                 'mirror_interval': self.config.get('mirror_interval', ''),
                 'private'        : repo.private,
-                'pull_requests'  : self.config.get('mirror_pull_requests', False),
+                'pull_requests'  : self.config.get('mirror_pull_requests',
+                                                   False),
                 'releases'       : self.config.get('mirror_releases', False),
                 'repo_name'      : repo_name,
                 'repo_owner'     : owner,
@@ -179,8 +200,8 @@ class Github2Gitea(object):
             }
 
             if repo.private:
-                m['auth_username'] = self.config['github_username']
-                m['auth_password'] = self.config['github_token']
+                m['auth_username'] = self.config.get('github_username', '')
+                m['auth_password'] = self.config.get('github_token', '')
 
             jsonstring = json.dumps(m)
             self.logger.debug(jsonstring)
@@ -265,6 +286,10 @@ class Github2Gitea(object):
         parser.add_argument(
             '-q', '--quiet', action='store_true', help='enable quiet mode'
         )
+        parser.add_argument(
+            '-s', '--syslog', action='store_true',
+            help='enable logging to syslog'
+        )
 
         parser.add_argument(
             'repos', nargs="*",
@@ -346,6 +371,8 @@ class Github2Gitea(object):
             loglevel = logging.DEBUG
         if args.quiet:
             loglevel = logging.ERROR
+        if args.syslog:
+            self.init_syslog()
         self.logger.setLevel(loglevel)
 
         self.config = {
