@@ -35,10 +35,7 @@ class Github2Gitea(object):
         self.logger = logging.getLogger('github2gitea')
         self.logger.setLevel(logging.INFO)
         ch = logging.StreamHandler()
-        formatter = logging.Formatter(
-            '%(asctime)s %(levelname)7s  %(message)s',
-            #datefmt='%Y-%m-%d %H:%M:%S'
-        )
+        formatter = logging.Formatter('%(levelname)7s  %(message)s')
         ch.setFormatter(formatter)
         self.logger.addHandler(ch)
 
@@ -144,9 +141,12 @@ class Github2Gitea(object):
                 r = self.gt.get(f'{apiurl}/repos/{owner}/{repo_name}')
                 if r.status_code == 200:
                     self.logger.info(f'Repo "{repo_name}" exists, deleting')
-                    r = self.gt.delete(f'{apiurl}/repos/{owner}/{repo_name}')
-                    if r.status_code != 204:
-                        raise G2GException(f'Error deleting "{repo_name}"')
+                    if not 'dry_run' in self.config:
+                        r = self.gt.delete(
+                            f'{apiurl}/repos/{owner}/{repo_name}'
+                        )
+                        if r.status_code != 204:
+                            raise G2GException(f'Error deleting "{repo_name}"')
 
             mirror_wiki = repo.has_wiki and \
                 self.config.get('mirror_wikis', False)
@@ -177,6 +177,10 @@ class Github2Gitea(object):
             self.logger.debug(jsonstring)
 
             if 'dry_run' in self.config:
+                self.logger.info(
+                    f'Not creating mirror "{repo_name}" as we are in'
+                    f'dry-run mode'
+                )
                 continue
 
             r = self.gt.post(f'{apiurl}/repos/migrate', data=jsonstring)
