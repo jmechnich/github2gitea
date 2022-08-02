@@ -100,6 +100,12 @@ class Github2Gitea(object):
 
         apiurl = self.config['gitea_apiurl']
         token  = self.config['gitea_token']
+
+        if apiurl.endswith('/'):
+            self.logger.warning(f'Gitea API url ends with slash, removing')
+            apiurl = apiurl.strip('/')
+            self.config['gitea_apiurl'] = apiurl
+
         self.gt = requests.Session()
         self.gt.headers.update({
             'Content-type'  : 'application/json',
@@ -108,7 +114,10 @@ class Github2Gitea(object):
 
         r = self.gt.get(f'{apiurl}/version')
         if r.status_code != 200:
-            raise G2GException('Cannot connect to Gitea API')
+            raise G2GException(
+                'Cannot connect to Gitea API. Is the API url correct,'
+                ' e.g. "https://server.domain/api/v1"?'
+            )
         version = json.loads(r.text)['version']
         self.logger.debug(f'Gitea version {version}')
 
