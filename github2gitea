@@ -186,10 +186,14 @@ class Github2Gitea(object):
             self.logger.debug(jsonstring)
 
             if 'dry_run' in self.config:
-                self.logger.info(
-                    f'Not creating mirror "{repo_name}" as we are in'
-                    f'dry-run mode'
-                )
+                r = self.gt.get(f'{apiurl}/repos/{owner}/{repo_name}')
+                if r.status_code == 200:
+                    self.logger.info(f'Repo "{repo_name}" already exists')
+                else:
+                    self.logger.info(
+                        f'Not creating mirror "{repo_name}" as we are in'
+                        f' dry-run mode'
+                    )
                 continue
 
             r = self.gt.post(f'{apiurl}/repos/migrate', data=jsonstring)
