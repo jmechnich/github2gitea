@@ -377,7 +377,7 @@ class Github2Gitea(object):
 
         self.config = {
             k: v for k,v in vars(args).items()
-            if v not in [ None, False, 'false', 'False' ]
+            if v not in [ None, False, 'false', 'False', [] ]
         }
 
 if __name__ == '__main__':
