@@ -14,20 +14,15 @@ adding new mirrors in regular intervals, e.g. using cron.
 All usage parameter can be set as command-line arguments:
 
 ```
-usage: github2gitea [-h] [-c CONFIG_FILE] [-d] [-n] [-p] [-q] [--github-token GITHUB_TOKEN]
-                    [--github-user GITHUB_USER] [--gitea-apiurl GITEA_APIURL]
-                    [--gitea-token GITEA_TOKEN] [--mirror-forks]
-                    [--owner-filter OWNER_FILTER] [--mirror-interval MIRROR_INTERVAL]
-                    [--mirror-issues] [--mirror-labels] [--mirror-milestones]
-                    [--mirror-owner MIRROR_OWNER] [--mirror-pull-requests]
-                    [--mirror-releases] [--mirror-wikis] [--recreate] [--use-full-name]
+usage: github2gitea [-h] [-c CONFIG_FILE] [-d] [-n] [-p] [-q] [-s] [-e EXCLUDE] [--github-token GITHUB_TOKEN] [--github-user GITHUB_USER] [--gitea-apiurl GITEA_APIURL] [--gitea-token GITEA_TOKEN] [--mirror-forks]
+                    [--owner-filter OWNER_FILTER] [--mirror-interval MIRROR_INTERVAL] [--mirror-issues] [--mirror-labels] [--mirror-milestones] [--mirror-owner MIRROR_OWNER] [--mirror-pull-requests] [--mirror-releases]
+                    [--mirror-wikis] [--recreate] [--use-full-name]
                     [repos ...]
 
 Set up Gitea mirrors of GitHub repositories.
 
 positional arguments:
-  repos                 (optional) explicit list of GitHub repositories formatted as
-                        owner/name
+  repos                 (optional) explicit list of GitHub repositories formatted as owner/name
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -37,6 +32,9 @@ optional arguments:
   -n, --dry-run         execute read-only actions
   -p, --print-config    print configuration and exit
   -q, --quiet           enable quiet mode
+  -s, --syslog          enable logging to syslog
+  -e EXCLUDE, --exclude EXCLUDE
+                        exclude list of GitHub repositories formatted as owner/name (comma separated) that will be skipped
   --github-token GITHUB_TOKEN
                         set GitHub access token
   --github-user GITHUB_USER
@@ -49,14 +47,12 @@ optional arguments:
   --owner-filter OWNER_FILTER
                         set GitHub repository owner filter
   --mirror-interval MIRROR_INTERVAL
-                        mirror interval (default: 8 hours). Valid time units are "h", "m,
-                        "s". 0 to disable automatic sync.
+                        mirror interval (default: 8 hours). Valid time units are "h", "m, "s". 0 to disable automatic sync.
   --mirror-issues       mirror issues (not yet fully implemented in Gitea)
   --mirror-labels       mirror labels (not yet fully implemented in Gitea)
   --mirror-milestones   mirror milestones (not yet fully implemented in Gitea)
   --mirror-owner MIRROR_OWNER
-                        set Gitea user or org owning the mirror repos (default: owner of used
-                        access token)
+                        set Gitea user or org owning the mirror repos (default: owner of used access token)
   --mirror-pull-requests
                         mirror pull requests (not yet fully implemented in Gitea)
   --mirror-releases     mirror releases (not yet fully implemented in Gitea)

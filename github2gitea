@@ -87,12 +87,20 @@ class Github2Gitea(object):
         if len(self.config['repos']):
             repos = []
             for repo in self.config['repos']:
+                if len(self.config['exclude']) \
+                        and repo in self.config['exclude']:
+                    self.logger.info(f'{repo} excluded')
+                    continue
                 self.logger.info(f'Retrieving repo info for {repo}')
                 repos.append(self.gh.get_repo(repo))
         else:
             repos = self.gh.get_user().get_repos()
         for repo in repos:
             self.logger.debug(repo.raw_data)
+            if len(self.config['exclude']) \
+                    and repo.full_name in self.config['exclude']:
+                self.logger.info(f'{repo} excluded')
+                continue
             if owner_filter and not re.match(owner_filter, repo.owner.login):
                 self.logger.info(
                     f'Repository "{repo.full_name}" skipped due to owner filter'
@@ -296,6 +304,12 @@ class Github2Gitea(object):
             help='(optional) explicit list of GitHub repositories formatted as owner/name'
         )
 
+        # gather exclude list as string, split later
+        parser.add_argument(
+            '-e', '--exclude', type=str,
+            help='exclude list of GitHub repositories formatted as owner/name (comma separated) that will be skipped'
+        )
+
         # API locations and authorization
         parser.add_argument(
             '--github-token', help='set GitHub access token'
@@ -379,6 +393,12 @@ class Github2Gitea(object):
             k: v for k,v in vars(args).items()
             if v not in [ None, False, 'false', 'False' ]
         }
+
+        # split list of excluded repos
+        if "exclude" in self.config.keys():
+            self.config["exclude"] = [s.strip() for s in self.config["exclude"].split(",")]
+
+        self.logger.debug(f'parse_args: self.config: {self.config}')
 
 if __name__ == '__main__':
     try:
