@@ -99,7 +99,7 @@ class Github2Gitea(object):
             self.logger.debug(repo.raw_data)
             if len(self.config['exclude']) \
                     and repo.full_name in self.config['exclude']:
-                self.logger.info(f'{repo} excluded')
+                self.logger.info(f'{repo.full_name} excluded')
                 continue
             if owner_filter and not re.match(owner_filter, repo.owner.login):
                 self.logger.info(
