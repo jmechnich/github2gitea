@@ -84,7 +84,7 @@ class Github2Gitea(object):
             self.logger.info(f'Using GitHub repo owner filter "{owner_filter}"')
         skip_forks = not self.config.get('mirror_forks', False)
 
-        if len(self.config['repos']):
+        if len(self.config.get('repos',[])):
             repos = []
             for repo in self.config['repos']:
                 self.logger.info(f'Retrieving repo info for {repo}')
