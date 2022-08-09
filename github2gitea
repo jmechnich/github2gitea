@@ -84,7 +84,7 @@ class Github2Gitea(object):
             self.logger.info(f'Using GitHub repo owner filter "{owner_filter}"')
         skip_forks = not self.config.get('migrate_forks', False)
 
-        if len(self.config.get('repos',[])):
+        if len(self.config.get('repos',[])) and not 'exclude' in self.config:
             repos = []
             for repo in self.config['repos']:
                 self.logger.info(f'Retrieving repo info for {repo}')
@@ -93,6 +93,18 @@ class Github2Gitea(object):
             repos = self.gh.get_user().get_repos()
         for repo in repos:
             self.logger.debug(repo.raw_data)
+            if 'exclude' in self.config:
+                exclude = ''
+                for ex in self.config.get('repos', []):
+                    if re.search(ex, repo.full_name):
+                        exclude = ex
+                        break
+                if len(exclude):
+                    self.logger.info(
+                        f'Repository "{repo.full_name}" skipped because it'
+                        f' contains expression "{exclude}"'
+                    )
+                    continue
             if owner_filter and not re.match(owner_filter, repo.owner.login):
                 self.logger.info(
                     f'Repository "{repo.full_name}" skipped due to owner filter'
@@ -294,7 +306,9 @@ class Github2Gitea(object):
         parser.add_argument(
             'repos', nargs="*",
             help='(optional) explicit list of GitHub repositories formatted as'
-            ' owner/name'
+            ' owner/name. By default, only the listed repositories are'
+            ' processed. If the --exclude option is given, the listed strings'
+            ' are used as search patterns for removing repositories.'
         )
 
         # API locations and authorization
@@ -312,6 +326,10 @@ class Github2Gitea(object):
         )
 
         # repo selection options
+        parser.add_argument(
+            '--exclude', action='store_true',
+            help='exclude repositories instead of exclusively selecting them'
+        )
         parser.add_argument(
             '--migrate-forks', action='store_true', help='migrate forks'
         )
@@ -392,3 +410,5 @@ if __name__ == '__main__':
     except G2GException as e:
         g2g.logger.error(str(e))
         sys.exit(1)
+    except KeyboardInterrupt:
+        pass

@@ -19,7 +19,7 @@ All usage parameter can be set as command-line arguments:
 ```
 usage: github2gitea [-h] [-c CONFIG_FILE] [-d] [-n] [-p] [-q] [-s]
                     [--github-token GITHUB_TOKEN] [--github-user GITHUB_USER]
-                    [--gitea-apiurl GITEA_APIURL] [--gitea-token GITEA_TOKEN]
+                    [--gitea-apiurl GITEA_APIURL] [--gitea-token GITEA_TOKEN] [--exclude]
                     [--migrate-forks] [--owner-filter OWNER_FILTER] [--migrate-issues]
                     [--migrate-labels] [--migrate-milestones] [--migrate-pull-requests]
                     [--migrate-releases] [--migrate-wikis] [--mirror]
@@ -31,7 +31,9 @@ Migrate GitHub repositories to Gitea.
 
 positional arguments:
   repos                 (optional) explicit list of GitHub repositories formatted as
-                        owner/name
+                        owner/name. By default, only the listed repositories are processed.
+                        If the --exclude option is given, the listed strings are used as
+                        search patterns for removing repositories.
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -50,6 +52,7 @@ optional arguments:
                         set Gitea API URL
   --gitea-token GITEA_TOKEN
                         set Gitea access token
+  --exclude             exclude repositories instead of exclusively selecting them
   --migrate-forks       migrate forks
   --owner-filter OWNER_FILTER
                         set GitHub repository owner filter
